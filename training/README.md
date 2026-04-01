@@ -114,3 +114,56 @@ data:
     _partial_: true
     dict_key: all
 ```
+
+## Temporal Frame Sampling
+
+By default SAM 2 uses uniform temporal stride during training.
+An optional motion-adaptive sampler is available that allocates
+more frames to high-motion intervals within each clip.
+
+To enable:
+
+```bash
+python training/train.py \
+    -c configs/sam2.1_training/sam2.1_hiera_l_adaptive.yaml \
+    --use-cluster 0 \
+    --num-gpus 8
+```
+
+Key hyperparameters in `sampler_cfg`:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `type` | `uniform` | Set to `adaptive` to enable motion-adaptive sampling |
+| `total_frames` | `8` | Number of frames per clip (must match model expectation) |
+| `motion_threshold` | `0.03` | L1 pixel-diff threshold for high-motion detection |
+| `budget_ratio` | `0.7` | Fraction of frame budget allocated to motion-dense regions |
+| `fallback_uniform` | `true` | Fall back to uniform sampling if motion scoring fails |
+
+To use adaptive sampling in an existing config, add `sampler_cfg` to the `dataset:` section:
+
+```yaml
+dataset:
+  sampler_cfg:
+    type: adaptive
+    total_frames: 8
+    motion_threshold: 0.03
+    budget_ratio: 0.7
+    fallback_uniform: true
+```
+
+and pass it to the sampler:
+
+```yaml
+sampler:
+  _target_: training.dataset.vos_sampler.RandomUniformSampler
+  num_frames: ${scratch.num_frames}
+  max_num_objects: ${scratch.max_num_objects}
+  sampler_cfg: ${dataset.sampler_cfg}
+```
+
+The adaptive sampler subsamples every 4th frame for lightweight motion
+scoring (mean absolute pixel diff), interpolates to full resolution,
+then allocates the frame budget proportionally: ~70% to high-motion
+transitions and ~30% filled uniformly from static regions. Frame 0 is
+always included.

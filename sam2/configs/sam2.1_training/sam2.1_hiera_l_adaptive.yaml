@@ -1,4 +1,13 @@
 # @package _global_
+#
+# SAM 2.1 Hiera-Large with adaptive temporal frame sampling.
+# Inherits model architecture from sam2.1_hiera_l and adds
+# motion-adaptive training configuration.
+#
+# Usage:
+#   python training/train.py \
+#       -c configs/sam2.1_training/sam2.1_hiera_l_adaptive.yaml \
+#       --use-cluster 0 --num-gpus 8
 
 scratch:
   resolution: 1024
@@ -15,19 +24,18 @@ dataset:
   # PATHS to Dataset
   img_folder: null # PATH to MOSE JPEGImages folder
   gt_folder: null  # PATH to MOSE Annotations folder
-  file_list_txt: training/assets/MOSE_sample_train_list.txt # Optional PATH to filelist containing a subset of videos to be used for training
+  file_list_txt: training/assets/MOSE_sample_train_list.txt
   multiplier: 2
 
-  # Temporal frame sampling strategy
-  # Set type: "uniform" or omit sampler_cfg entirely for original behavior
+  # Temporal frame sampling: motion-adaptive
   sampler_cfg:
-    type: uniform          # change to "adaptive" to enable new sampler
-    total_frames: 8        # must match model's num_frames expectation
-    motion_threshold: 0.03 # L1 diff threshold (0.0â€“1.0 scale)
-    budget_ratio: 0.7      # fraction of budget for high-motion regions
-    fallback_uniform: true # safe fallback if motion scoring fails
+    type: adaptive
+    total_frames: 8
+    motion_threshold: 0.03
+    budget_ratio: 0.7
+    fallback_uniform: true
 
-# Video transforms
+# Video transforms (same as base config)
 vos:
   train_transforms:
     - _target_: training.dataset.transforms.ComposeAPI
@@ -77,8 +85,11 @@ trainer:
       scalp: 1
       trunk:
         _target_: sam2.modeling.backbones.hieradet.Hiera
-        embed_dim: 112
+        embed_dim: 144
         num_heads: 2
+        stages: [2, 6, 36, 2]
+        global_att_blocks: [23, 33, 43]
+        window_pos_embed_bkg_spatial_size: [7, 7]
         drop_path_rate: 0.1
       neck:
         _target_: sam2.modeling.backbones.image_encoder.FpnNeck
@@ -89,8 +100,8 @@ trainer:
           scale: null
           temperature: 10000
         d_model: 256
-        backbone_channel_list: [896, 448, 224, 112]
-        fpn_top_down_levels: [2, 3]  # output level 0 and 1 directly use the backbone features
+        backbone_channel_list: [1152, 576, 288, 144]
+        fpn_top_down_levels: [2, 3]
         fpn_interp_model: nearest
 
     memory_attention:
@@ -148,65 +159,49 @@ trainer:
             kernel_size: 7
             padding: 3
             layer_scale_init_value: 1e-6
-            use_dwconv: True  # depth-wise convs
+            use_dwconv: True
           num_layers: 2
 
     num_maskmem: 7
     image_size: ${scratch.resolution}
-    # apply scaled sigmoid on mask logits for memory encoder, and directly feed input mask as output mask
     sigmoid_scale_for_mem_enc: 20.0
     sigmoid_bias_for_mem_enc: -10.0
     use_mask_input_as_output_without_sam: true
-    # Memory
     directly_add_no_mem_embed: true
     no_obj_embed_spatial: true
-    # use high-resolution feature map in the SAM mask decoder
     use_high_res_features_in_sam: true
-    # output 3 masks on the first click on initial conditioning frames
     multimask_output_in_sam: true
-    # SAM heads
     iou_prediction_use_sigmoid: True
-    # cross-attend to object pointers from other frames (based on SAM output tokens) in the encoder
     use_obj_ptrs_in_encoder: true
     add_tpos_enc_to_obj_ptrs: true
     proj_tpos_enc_in_obj_ptrs: true
     use_signed_tpos_enc_to_obj_ptrs: true
     only_obj_ptrs_in_the_past_for_eval: true
-    # object occlusion prediction
     pred_obj_scores: true
     pred_obj_scores_mlp: true
     fixed_no_obj_ptr: true
-    # multimask tracking settings
     multimask_output_for_tracking: true
     use_multimask_token_for_obj_ptr: true
     multimask_min_pt_num: 0
     multimask_max_pt_num: 1
     use_mlp_for_obj_ptr_proj: true
-    # Compilation flag
-    # compile_image_encoder: False
 
     ####### Training specific params #######
-    # box/point input and corrections
     prob_to_use_pt_input_for_train: 0.5
     prob_to_use_pt_input_for_eval: 0.0
-    prob_to_use_box_input_for_train: 0.5  # 0.5*0.5 = 0.25 prob to use box instead of points
+    prob_to_use_box_input_for_train: 0.5
     prob_to_use_box_input_for_eval: 0.0
-    prob_to_sample_from_gt_for_train: 0.1  # with a small prob, sampling correction points from GT mask instead of prediction errors
-    num_frames_to_correct_for_train: 2  # iteratively sample on random 1~2 frames (always include the first frame)
-    num_frames_to_correct_for_eval: 1  # only iteratively sample on first frame
-    rand_frames_to_correct_for_train: True  # random #init-cond-frame ~ 2
-    add_all_frames_to_correct_as_cond: True  # when a frame receives a correction click, it becomes a conditioning frame (even if it's not initially a conditioning frame)
-    # maximum 2 initial conditioning frames
+    prob_to_sample_from_gt_for_train: 0.1
+    num_frames_to_correct_for_train: 2
+    num_frames_to_correct_for_eval: 1
+    rand_frames_to_correct_for_train: True
+    add_all_frames_to_correct_as_cond: True
     num_init_cond_frames_for_train: 2
-    rand_init_cond_frames_for_train: True  # random 1~2
+    rand_init_cond_frames_for_train: True
     num_correction_pt_per_frame: 7
     use_act_ckpt_iterative_pt_sampling: false
-    
-
-    
-    num_init_cond_frames_for_eval: 1  # only mask on the first frame
+    num_init_cond_frames_for_eval: 1
     forward_backbone_per_frame_for_eval: True
-    
 
   data:
     train:
@@ -315,10 +310,9 @@ trainer:
     log_dir: ${launcher.experiment_log_dir}/logs
     log_freq: 10
 
-  # initialize from a SAM 2 checkpoint
   checkpoint:
     save_dir: ${launcher.experiment_log_dir}/checkpoints
-    save_freq: 0 # 0 only last checkpoint is saved.
+    save_freq: 0
     model_weight_initializer:
       _partial_: True
       _target_: training.utils.checkpoint_utils.load_state_dict_into_model
@@ -328,15 +322,14 @@ trainer:
 
       state_dict:
         _target_: training.utils.checkpoint_utils.load_checkpoint_and_apply_kernels
-        checkpoint_path: ./checkpoints/sam2.1_hiera_base_plus.pt # PATH to SAM 2.1 checkpoint
+        checkpoint_path: ./checkpoints/sam2.1_hiera_large.pt
         ckpt_state_dict_keys: ['model']
 
 launcher:
   num_nodes: 1
   gpus_per_node: 8
-  experiment_log_dir: null # Path to log directory, defaults to ./sam2_logs/${config_name}
+  experiment_log_dir: null
 
-# SLURM args if running on a cluster
 submitit:
   partition: null
   account: null
@@ -345,5 +338,4 @@ submitit:
   use_cluster: false
   timeout_hour: 24
   name: null
-  port_range: [10000, 65000]
-
+  port_range: [10000, 60000]

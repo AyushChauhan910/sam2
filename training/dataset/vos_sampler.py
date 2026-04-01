@@ -6,7 +6,7 @@
 
 import random
 from dataclasses import dataclass
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from training.dataset.vos_segment_loader import LazySegments
 
@@ -34,10 +34,37 @@ class RandomUniformSampler(VOSSampler):
         num_frames,
         max_num_objects,
         reverse_time_prob=0.0,
+        sampler_cfg: Optional[Dict[str, Any]] = None,
     ):
         self.num_frames = num_frames
         self.max_num_objects = max_num_objects
         self.reverse_time_prob = reverse_time_prob
+        self.sampler_cfg = sampler_cfg or {}
+
+        self._adaptive_sampler = None
+        if self.sampler_cfg.get("type") == "adaptive":
+            try:
+                from sam2.utils.adaptive_sampler import AdaptiveTemporalSampler
+                self._adaptive_sampler = AdaptiveTemporalSampler(
+                    total_frames=self.sampler_cfg.get(
+                        "total_frames", num_frames
+                    ),
+                    motion_threshold=self.sampler_cfg.get(
+                        "motion_threshold", 0.03
+                    ),
+                    budget_ratio=self.sampler_cfg.get(
+                        "budget_ratio", 0.7
+                    ),
+                    fallback_uniform=self.sampler_cfg.get(
+                        "fallback_uniform", True
+                    ),
+                )
+            except Exception as e:
+                import warnings
+                warnings.warn(
+                    f"AdaptiveTemporalSampler init failed ({e}), "
+                    "falling back to uniform sampling."
+                )
 
     def sample(self, video, segment_loader, epoch=None):
 
@@ -46,8 +73,37 @@ class RandomUniformSampler(VOSSampler):
                 raise Exception(
                     f"Cannot sample {self.num_frames} frames from video {video.video_name} as it only has {len(video.frames)} annotated frames."
                 )
-            start = random.randrange(0, len(video.frames) - self.num_frames + 1)
-            frames = [video.frames[start + step] for step in range(self.num_frames)]
+
+            # â”€â”€ Adaptive sampling (optional) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            if self._adaptive_sampler is not None:
+                try:
+                    frame_paths = [f.image_path for f in video.frames]
+                    frame_indices = self._adaptive_sampler.sample(
+                        frame_paths,
+                        seed=None,
+                    )
+                    frames = [video.frames[i] for i in frame_indices]
+                except Exception as e:
+                    import warnings
+                    warnings.warn(
+                        f"Adaptive sampling failed ({e}), using uniform."
+                    )
+                    start = random.randrange(
+                        0, len(video.frames) - self.num_frames + 1
+                    )
+                    frames = [
+                        video.frames[start + step]
+                        for step in range(self.num_frames)
+                    ]
+            else:
+                start = random.randrange(
+                    0, len(video.frames) - self.num_frames + 1
+                )
+                frames = [
+                    video.frames[start + step]
+                    for step in range(self.num_frames)
+                ]
+
             if random.uniform(0, 1) < self.reverse_time_prob:
                 # Reverse time
                 frames = frames[::-1]

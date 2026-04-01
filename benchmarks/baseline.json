@@ -1,0 +1,16 @@
+{
+  "jf_mean": 90.7,
+  "fps": 39.5,
+  "peak_vram_gb": null,
+  "model": "sam2.1_hiera_large",
+  "source": "SAM 2 paper (arXiv:2408.00714), Table 6 + README",
+  "notes": {
+    "jf_mean": "SAM 2 (Hiera-L) J&F on DAVIS 2017 val = 90.7 from Table 6 of the SAM 2 paper. Re-run benchmarks/run_baseline.py on a CUDA GPU to verify.",
+    "fps": "39.5 FPS from SAM 2 README (A100, torch 2.5.1, CUDA 12.4, vos_optimized). Paper reports 30.2 FPS without compilation.",
+    "peak_vram_gb": "Not reported in paper. Run benchmarks/run_baseline.py to measure."
+  },
+  "dataset": "DAVIS-2017 val (22 videos, semi-supervised, first-frame mask)",
+  "hardware": "NVIDIA A100",
+  "torch_version": "2.5.1",
+  "cuda_version": "12.4"
+}
