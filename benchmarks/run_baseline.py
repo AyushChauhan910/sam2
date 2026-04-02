@@ -256,6 +256,8 @@ def main():
         default=0.7,
         help="Budget ratio for adaptive sampler",
     )
+    parser.add_argument("--num_sequences", type=int, default=None,
+        help="Limit number of sequences for dry runs")
     args = parser.parse_args()
 
     # Label the run
@@ -278,6 +280,8 @@ def main():
     # â”€â”€ Ensure DAVIS dataset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     ensure_davis(davis_root)
     video_names = get_val_videos(davis_root)
+    if args.num_sequences is not None:
+        video_names = video_names[:args.num_sequences]
     print(f"DAVIS-2017 val: {len(video_names)} videos\n")
 
     # â”€â”€ Build predictor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
