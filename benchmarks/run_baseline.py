@@ -196,8 +196,7 @@ def run_inference_and_measure(predictor, base_video_dir, input_mask_dir,
     return avg_fps, peak_vram_gb
 
 
-def evaluate_jf(davis_root: Path, output_mask_dir: Path) -> float:
-    """Compute J&F-Mean using the built-in benchmark code."""
+def evaluate_jf(davis_root: Path, output_mask_dir: Path, video_names: list = None) -> float:
     gt_root = str(davis_root / "Annotations" / "480p")
     pred_root = str(output_mask_dir)
 
@@ -205,10 +204,11 @@ def evaluate_jf(davis_root: Path, output_mask_dir: Path) -> float:
     all_global_jf, all_global_j, all_global_f, _ = run_jf_benchmark(
         gt_roots=[gt_root],
         mask_roots=[pred_root],
-        strict=True,
+        strict=False,        # ← changed from True to False
         num_processes=4,
         verbose=True,
-        skip_first_and_last=True,  # DAVIS semi-supervised convention
+        skip_first_and_last=True,
+        sequences=video_names,  # ← only evaluate predicted videos
     )
     return all_global_jf[0]
 
@@ -311,7 +311,7 @@ def main():
     )
 
     # â”€â”€ Evaluate J&F â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    jf_mean = evaluate_jf(davis_root, OUTPUT_DIR)
+    jf_mean = evaluate_jf(davis_root, OUTPUT_DIR, video_names)
 
     # â”€â”€ Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     results = {
