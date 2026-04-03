@@ -1,0 +1,10 @@
+{
+  "experiment": "training_frame_selection_analysis",
+  "dataset": "DAVIS-2017 val (15 sequences)",
+  "total_frames_per_clip": 8,
+  "uniform_motion_coverage_mean": 0.1224,
+  "adaptive_motion_coverage_mean": 0.1274,
+  "delta_motion_coverage": 0.005,
+  "sequences_analyzed": 15,
+  "note": "Motion coverage = fraction of high-motion frames (top 30% by L1 diff) selected per clip"
+}

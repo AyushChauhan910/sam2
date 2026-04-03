@@ -1,0 +1,7 @@
+{
+  "jf_mean": 88.4306,
+  "fps": 0.69,
+  "peak_vram_gb": 4.97,
+  "model": "sam2.1_hiera_large",
+  "sampling": "uniform"
+}
