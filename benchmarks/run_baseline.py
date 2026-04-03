@@ -204,11 +204,10 @@ def evaluate_jf(davis_root: Path, output_mask_dir: Path, video_names: list = Non
     all_global_jf, all_global_j, all_global_f, _ = run_jf_benchmark(
         gt_roots=[gt_root],
         mask_roots=[pred_root],
-        strict=False,        # ← changed from True to False
+        strict=False,
         num_processes=4,
         verbose=True,
         skip_first_and_last=True,
-        sequences=video_names,  # ← only evaluate predicted videos
     )
     return all_global_jf[0]
 
